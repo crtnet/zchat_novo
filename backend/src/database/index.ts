@@ -1,3 +1,8 @@
+/**
+ * Arquivo de configuração do banco de dados
+ * Responsável por inicializar a conexão com o banco de dados e carregar todos os modelos
+ */
+
 import { Sequelize } from "sequelize-typescript";
 import User from "../models/User";
 import Setting from "../models/Setting";
@@ -38,12 +43,14 @@ import FilesOptions from "../models/FilesOptions";
 import Prompt from "../models/Prompt";
 import QueueIntegrations from "../models/QueueIntegrations";
 
-// eslint-disable-next-line
+// Carrega as configurações do banco de dados
 const dbConfig = require("../config/database");
 // import dbConfig from "../config/database";
 
+// Inicializa a conexão com o banco de dados
 const sequelize = new Sequelize(dbConfig);
 
+// Lista de todos os modelos que serão carregados pelo Sequelize
 const models = [
   Company,
   User,
@@ -85,6 +92,7 @@ const models = [
   QueueIntegrations,
 ];
 
+// Adiciona os modelos ao Sequelize
 sequelize.addModels(models);
 
 export default sequelize;

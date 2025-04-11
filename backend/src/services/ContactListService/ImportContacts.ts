@@ -1,6 +1,5 @@
-import { head } from "lodash";
-import XLSX from "xlsx";
-import { has } from "lodash";
+import { head, has } from "lodash";
+import ExcelJS from "exceljs";
 import ContactListItem from "../../models/ContactListItem";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 import { logger } from "../../utils/logger";
@@ -11,38 +10,28 @@ export async function ImportContacts(
   companyId: number,
   file: Express.Multer.File | undefined
 ) {
-  const workbook = XLSX.readFile(file?.path as string);
-  const worksheet = head(Object.values(workbook.Sheets)) as any;
-  const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 0 });
-  const contacts = rows.map(row => {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(file?.path as string);
+  const worksheet = workbook.worksheets[0];
+  
+  const contacts = [];
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return; // Skip header row
+    
+    const values = row.values as any[];
     let name = "";
     let number = "";
     let email = "";
 
-    if (has(row, "nome") || has(row, "Nome")) {
-      name = row["nome"] || row["Nome"];
+    // Assuming columns are in order: name, number, email
+    if (values[1]) name = values[1].toString();
+    if (values[2]) {
+      number = values[2].toString();
+      number = number.replace(/\D/g, "");
     }
+    if (values[3]) email = values[3].toString();
 
-    if (
-      has(row, "numero") ||
-      has(row, "número") ||
-      has(row, "Numero") ||
-      has(row, "Número")
-    ) {
-      number = row["numero"] || row["número"] || row["Numero"] || row["Número"];
-      number = `${number}`.replace(/\D/g, "");
-    }
-
-    if (
-      has(row, "email") ||
-      has(row, "e-mail") ||
-      has(row, "Email") ||
-      has(row, "E-mail")
-    ) {
-      email = row["email"] || row["e-mail"] || row["Email"] || row["E-mail"];
-    }
-
-    return { name, number, email, contactListId, companyId };
+    contacts.push({ name, number, email, contactListId, companyId });
   });
 
   const contactList: ContactListItem[] = [];

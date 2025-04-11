@@ -46,7 +46,7 @@ import Setting from "../../models/Setting";
 import { cacheLayer } from "../../libs/cache";
 import { provider } from "./providers";
 import { debounce } from "../../helpers/Debounce";
-import { ChatCompletionRequestMessage, Configuration, OpenAIApi } from "openai";
+import OpenAI from "openai";
 import ffmpeg from "fluent-ffmpeg";
 import {
   SpeechConfig,
@@ -56,8 +56,7 @@ import {
 import typebotListener from "../TypebotServices/typebotListener";
 import QueueIntegrations from "../../models/QueueIntegrations";
 import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
-
-const request = require("request");
+import axios from "axios";
 
 const fs = require('fs')
 
@@ -66,13 +65,17 @@ type Session = WASocket & {
   store?: Store;
 };
 
-interface SessionOpenAi extends OpenAIApi {
+interface SessionOpenAi extends OpenAI {
   id?: number;
 }
-const sessionsOpenAi: SessionOpenAi[] = [];
+
+interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
 
 interface ImessageUpsert {
-  messages: proto.IWebMessageInfo[];
+  messages: proto.WebMessageInfo[];
   type: MessageUpsertType;
 }
 
@@ -644,10 +647,9 @@ const handleOpenAi = async (
 
 
   if (openAiIndex === -1) {
-    const configuration = new Configuration({
+    openai = new OpenAI({
       apiKey: prompt.apiKey
     });
-    openai = new OpenAIApi(configuration);
     openai.id = wbot.id;
     sessionsOpenAi.push(openai);
   } else {
@@ -666,7 +668,7 @@ const handleOpenAi = async (
     } tokens e cuide para não truncar o final.\nSempre que possível, mencione o nome dele para ser mais personalizado o atendimento e mais educado. Quando a resposta requer uma transferência para o setor de atendimento, comece sua resposta com 'Ação: Transferir para o setor de atendimento'.\n
   ${prompt.prompt}\n`;
 
-  let messagesOpenAi: ChatCompletionRequestMessage[] = [];
+  let messagesOpenAi: ChatMessage[] = [];
 
   if (msg.message?.conversation || msg.message?.extendedTextMessage?.text) {
     messagesOpenAi = [];
@@ -687,14 +689,14 @@ const handleOpenAi = async (
     }
     messagesOpenAi.push({ role: "user", content: bodyMessage! });
 
-    const chat = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo-1106",
+    const chat = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
       messages: messagesOpenAi,
-      max_tokens: prompt.maxTokens,
-      temperature: prompt.temperature
+      temperature: 0.7,
+      max_tokens: 1000
     });
 
-    let response = chat.data.choices[0].message?.content;
+    let response = chat.choices[0].message?.content;
 
     if (response?.includes("Ação: Transferir para o setor de atendimento")) {
       await transferQueue(prompt.queueId, ticket, contact);
@@ -735,7 +737,10 @@ const handleOpenAi = async (
   } else if (msg.message?.audioMessage) {
     const mediaUrl = mediaSent!.mediaUrl!.split("/").pop();
     const file = fs.createReadStream(`${publicFolder}/${mediaUrl}`) as any;
-    const transcription = await openai.createTranscription(file, "whisper-1");
+    const transcription = await openai.audio.transcriptions.create({
+      file: file,
+      model: "whisper-1"
+    });
 
     messagesOpenAi = [];
     messagesOpenAi.push({ role: "system", content: promptSystem });
@@ -753,14 +758,14 @@ const handleOpenAi = async (
         }
       }
     }
-    messagesOpenAi.push({ role: "user", content: transcription.data.text });
-    const chat = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo-1106",
+    messagesOpenAi.push({ role: "user", content: transcription.text });
+    const chat = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
       messages: messagesOpenAi,
-      max_tokens: prompt.maxTokens,
-      temperature: prompt.temperature
+      temperature: 0.7,
+      max_tokens: 1000
     });
-    let response = chat.data.choices[0].message?.content;
+    let response = chat.choices[0].message?.content;
 
     if (response?.includes("Ação: Transferir para o setor de atendimento")) {
       await transferQueue(prompt.queueId, ticket, contact);
@@ -1631,14 +1636,13 @@ export const handleMessageIntegration = async (
         json: msg
       };
       try {
-        request(options, function (error, response) {
-          if (error) {
+        axios(options)
+          .then(response => {
+            console.log(response.data);
+          })
+          .catch(error => {
             throw new Error(error);
-          }
-          else {
-            console.log(response.body);
-          }
-        });
+          });
       } catch (error) {
         throw new Error(error);
       }
@@ -2231,7 +2235,7 @@ const filterMessages = (msg: WAMessage): boolean => {
       WAMessageStubType.E2E_DEVICE_CHANGED,
       WAMessageStubType.E2E_IDENTITY_CHANGED,
       WAMessageStubType.CIPHERTEXT
-    ].includes(msg.messageStubType as WAMessageStubType)
+    ].includes(msg.messageStubType)
   )
     return false;
 
