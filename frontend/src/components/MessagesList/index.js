@@ -652,10 +652,11 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
             )
           }
 
-          {message.quotedMsg.mediaType === "image"
-            && (
-              <ModalImageCors imageUrl={message.quotedMsg.mediaUrl} />)
-            || message.quotedMsg?.body}
+          {message.quotedMsg.mediaType === "image" ? (
+            <ModalImageCors imageUrl={message.quotedMsg.mediaUrl} />
+          ) : (
+            message.quotedMsg?.body
+          )}
 
         </div>
       </div>

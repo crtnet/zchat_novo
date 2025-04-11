@@ -1,8 +1,3 @@
-/**
- * Arquivo de configuração do banco de dados
- * Responsável por inicializar a conexão com o banco de dados e carregar todos os modelos
- */
-
 import { Sequelize } from "sequelize-typescript";
 import User from "../models/User";
 import Setting from "../models/Setting";
@@ -42,54 +37,66 @@ import Files from "../models/Files";
 import FilesOptions from "../models/FilesOptions";
 import Prompt from "../models/Prompt";
 import QueueIntegrations from "../models/QueueIntegrations";
-import dbConfig from "../config/database";
+import databaseConfig from "../config/database";
 
-// Inicializa a conexão com o banco de dados
-const sequelize = new Sequelize(dbConfig);
+const sequelize = new Sequelize({
+  ...databaseConfig,
+  models: [
+    Company,
+    User,
+    Contact,
+    Ticket,
+    Message,
+    Whatsapp,
+    ContactCustomField,
+    Setting,
+    Queue,
+    WhatsappQueue,
+    UserQueue,
+    Plan,
+    TicketNote,
+    QuickMessage,
+    Help,
+    TicketTraking,
+    UserRating,
+    QueueOption,
+    Schedule,
+    Tag,
+    TicketTag,
+    ContactList,
+    ContactListItem,
+    Campaign,
+    CampaignSetting,
+    Baileys,
+    CampaignShipping,
+    Announcement,
+    Chat,
+    ChatUser,
+    ChatMessage,
+    Invoices,
+    Subscriptions,
+    BaileysChats,
+    Files,
+    FilesOptions,
+    Prompt,
+    QueueIntegrations
+  ]
+});
 
-// Lista de todos os modelos que serão carregados pelo Sequelize
-const models = [
-  Company,
-  User,
-  Contact,
-  Ticket,
-  Message,
-  Whatsapp,
-  ContactCustomField,
-  Setting,
-  Queue,
-  WhatsappQueue,
-  UserQueue,
-  Plan,
-  TicketNote,
-  QuickMessage,
-  Help,
-  TicketTraking,
-  UserRating,
-  QueueOption,
-  Schedule,
-  Tag,
-  TicketTag,
-  ContactList,
-  ContactListItem,
-  Campaign,
-  CampaignSetting,
-  Baileys,
-  CampaignShipping,
-  Announcement,
-  Chat,
-  ChatUser,
-  ChatMessage,
-  Invoices,
-  Subscriptions,
-  BaileysChats,
-  Files,
-  FilesOptions,
-  Prompt,
-  QueueIntegrations,
-];
+async function migrate() {
+  try {
+    await sequelize.authenticate();
+    console.log("Conexão com o banco de dados estabelecida com sucesso.");
 
-// Adiciona os modelos ao Sequelize
-sequelize.addModels(models);
+    // Força a sincronização dos modelos com o banco de dados
+    await sequelize.sync({ force: true });
+    console.log("Migrações executadas com sucesso.");
 
-export default sequelize;
+    await sequelize.close();
+  } catch (error) {
+    console.error("Erro ao executar migrações:", error);
+    process.exit(1);
+  }
+}
+
+migrate();

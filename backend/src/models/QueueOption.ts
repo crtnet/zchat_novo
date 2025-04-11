@@ -44,10 +44,17 @@ class QueueOption extends Model<QueueOption> {
   @UpdatedAt
   updatedAt: Date;
 
-  @BelongsTo(() => Queue)
+  @BelongsTo(() => Queue, {
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE'
+  })
   queue: Queue;
 
-  @BelongsTo(() => QueueOption, { foreignKey: 'parentId' })
+  @BelongsTo(() => QueueOption, {
+    foreignKey: 'parentId',
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE'
+  })
   parent: QueueOption;
 }
 

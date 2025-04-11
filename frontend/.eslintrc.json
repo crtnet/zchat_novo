@@ -1,0 +1,14 @@
+{
+  "extends": [
+    "react-app",
+    "react-app/jest"
+  ],
+  "rules": {
+    "no-unused-vars": "warn",
+    "react-hooks/exhaustive-deps": "warn",
+    "no-lone-blocks": "warn",
+    "no-dupe-keys": "error",
+    "react/jsx-no-comment-textnodes": "warn",
+    "no-mixed-operators": "warn"
+  }
+} 

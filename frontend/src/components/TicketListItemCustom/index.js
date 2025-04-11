@@ -135,12 +135,10 @@ const useStyles = makeStyles((theme) => ({
     right: "108px",
   },
 
-
-  acceptButton: {
+  acceptButtonPosition: {
     position: "absolute",
     left: "50%",
   },
-
 
   ticketQueueColor: {
     flex: "none",
@@ -302,7 +300,7 @@ const useStyles = makeStyles((theme) => ({
 	
 	    const handleSendMessage = async (id) => {
         
-        const msg = `{{ms}} *{{name}}*, meu nome é *${user?.name}* e agora vou prosseguir com seu atendimento!`;
+        const msg = `{{ms}} *{{name}}*, meu nome é *${user?.name}* e agora vou prosseguir com seu atendimento!`;
         const message = {
             read: 1,
             fromMe: true,

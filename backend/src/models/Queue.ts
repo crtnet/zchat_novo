@@ -38,22 +38,19 @@ class Queue extends Model<Queue> {
   name: string;
 
   @AllowNull(false)
-  @Unique
   @Column
   color: string;
 
-  @Default("")
+  @Default(0)
   @Column
   greetingMessage: string;
 
-  @Default("")
   @Column
   outOfHoursMessage: string;
 
-  @Column({
-    type: DataType.JSONB
-  })
-  schedules: [];
+  @Default("")
+  @Column
+  schedules: string;
 
   @CreatedAt
   createdAt: Date;
@@ -68,23 +65,15 @@ class Queue extends Model<Queue> {
   @BelongsTo(() => Company)
   company: Company;
 
-  @BelongsToMany(() => Whatsapp, () => WhatsappQueue)
-  whatsapps: Array<Whatsapp & { WhatsappQueue: WhatsappQueue }>;
-
-  @BelongsToMany(() => User, () => UserQueue)
-  users: Array<User & { UserQueue: UserQueue }>;
-
-  @HasMany(() => QueueOption, {
-    onDelete: "DELETE",
-    onUpdate: "DELETE",
-    hooks: true
-  })
+  @HasMany(() => QueueOption)
   options: QueueOption[];
 
-  @Column
-  orderQueue: number;
+  @BelongsToMany(() => Whatsapp, () => WhatsappQueue)
+  whatsapps: Whatsapp[];
 
-  
+  @BelongsToMany(() => User, () => UserQueue)
+  users: User[];
+
   @ForeignKey(() => QueueIntegrations)
   @Column
   integrationId: number;

@@ -18,8 +18,13 @@ import routes from "./routes";
 import { logger } from "./utils/logger";
 import { messageQueue, sendScheduledMessages } from "./queues";
 
-// Inicializa o Sentry para monitoramento de erros
-Sentry.init({ dsn: process.env.SENTRY_DSN });
+// Inicializa o Sentry para monitoramento de erros apenas se a DSN estiver configurada e for válida
+if (process.env.SENTRY_DSN && process.env.SENTRY_DSN !== 'sua_dsn_do_sentry_aqui') {
+  Sentry.init({ 
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development'
+  });
+}
 
 const app = express();
 
@@ -33,14 +38,18 @@ app.set("queues", {
 app.use(
   cors({
     credentials: true,
-    origin: process.env.FRONTEND_URL
+    origin: [process.env.FRONTEND_URL, "http://localhost:3000"]
   })
 );
 
 // Middlewares básicos
 app.use(cookieParser());
 app.use(express.json());
-app.use(Sentry.Handlers.requestHandler());
+
+// Adiciona o middleware do Sentry apenas se estiver configurado e for válido
+if (process.env.SENTRY_DSN && process.env.SENTRY_DSN !== 'sua_dsn_do_sentry_aqui') {
+  app.use(Sentry.Handlers.requestHandler());
+}
 
 // Configuração de arquivos estáticos
 app.use("/public", express.static(uploadConfig.directory));
@@ -48,8 +57,10 @@ app.use("/public", express.static(uploadConfig.directory));
 // Rotas da aplicação
 app.use(routes);
 
-// Handler de erros do Sentry
-app.use(Sentry.Handlers.errorHandler());
+// Handler de erros do Sentry apenas se estiver configurado e for válido
+if (process.env.SENTRY_DSN && process.env.SENTRY_DSN !== 'sua_dsn_do_sentry_aqui') {
+  app.use(Sentry.Handlers.errorHandler());
+}
 
 // Middleware de tratamento de erros global
 app.use(async (err: Error, req: Request, res: Response, _: NextFunction) => {

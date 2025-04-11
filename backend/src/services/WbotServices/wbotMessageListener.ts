@@ -3,6 +3,7 @@ import { promisify } from "util";
 import { readFile, writeFile } from "fs";
 import * as Sentry from "@sentry/node";
 import { isNil, isNull, head } from "lodash";
+import OpenAI from "openai";
 
 import {
   downloadMediaMessage,
@@ -46,7 +47,6 @@ import Setting from "../../models/Setting";
 import { cacheLayer } from "../../libs/cache";
 import { provider } from "./providers";
 import { debounce } from "../../helpers/Debounce";
-import OpenAI from "openai";
 import ffmpeg from "fluent-ffmpeg";
 import {
   SpeechConfig,
@@ -68,6 +68,36 @@ type Session = WASocket & {
 interface SessionOpenAi extends OpenAI {
   id?: number;
 }
+
+let sessionsOpenAi: SessionOpenAi[] = [];
+
+const getOpenAiSession = async (whatsappId: number): Promise<OpenAI> => {
+  let openAiSession: SessionOpenAi | undefined = sessionsOpenAi.find(
+    s => s.id === whatsappId
+  );
+
+  if (!openAiSession) {
+    const setting = await Setting.findOne({
+      where: { key: "openai" }
+    });
+
+    const settingVal = JSON.parse(setting ? setting.value : "{}");
+    const apiKey = settingVal.apiKey || "";
+
+    if (!apiKey) {
+      throw new Error("OpenAI API Key not found");
+    }
+
+    openAiSession = new OpenAI({
+      apiKey: apiKey
+    });
+
+    openAiSession.id = whatsappId;
+    sessionsOpenAi.push(openAiSession);
+  }
+
+  return openAiSession;
+};
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -418,7 +448,7 @@ const getSenderMessage = (
   const me = getMeSocket(wbot);
   if (msg.key.fromMe) return me.id;
 
-  const senderId = msg.participant || msg.key.participant || msg.key.remoteJid || undefined;
+  const senderId = msg.key.participant || msg.key.remoteJid || undefined;
 
   return senderId && jidNormalizedUser(senderId);
 };
@@ -438,20 +468,11 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
 };
 
 const downloadMedia = async (msg: proto.IWebMessageInfo) => {
-
-  let buffer
+  let buffer;
   try {
-    buffer = await downloadMediaMessage(
-      msg,
-      'buffer',
-      {}
-    )
+    buffer = await downloadMediaMessage(msg);
   } catch (err) {
-
-
     console.error('Erro ao baixar mídia:', err);
-
-    // Trate o erro de acordo com as suas necessidades
   }
 
   let filename = msg.message?.documentMessage?.fileName || "";
@@ -1399,37 +1420,6 @@ const handleChartbot = async (ticket: Ticket, msg: WAMessage, wbot: Session, don
       }
     });
 
-    // const botList = async () => {
-    // const sectionsRows = [];
-
-    // queues.forEach((queue, index) => {
-    //   sectionsRows.push({
-    //     title: queue.name,
-    //     rowId: `${index + 1}`
-    //   });
-    // });
-
-    // const sections = [
-    //   {
-    //     rows: sectionsRows
-    //   }
-    // ];
-
-
-    //   const listMessage = {
-    //     text: formatBody(`\u200e${queue.greetingMessage}`, ticket.contact),
-    //     buttonText: "Escolha uma opção",
-    //     sections
-    //   };
-
-    //   const sendMsg = await wbot.sendMessage(
-    //     `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`,
-    //     listMessage
-    //   );
-
-    //   await verifyMessage(sendMsg, ticket, ticket.contact);
-    // }
-
     const botButton = async () => {
       const buttons = [];
       queueOptions.forEach((option, i) => {
@@ -1465,7 +1455,6 @@ const handleChartbot = async (ticket: Ticket, msg: WAMessage, wbot: Session, don
       queueOptions.forEach((option, i) => {
         options += `*[ ${option.option} ]* - ${option.title}\n`;
       });
-      //options += `\n*[ 0 ]* - Menu anterior`;
       options += `\n*[ # ]* - Menu inicial`;
 
       const textMessage = {
@@ -1479,10 +1468,6 @@ const handleChartbot = async (ticket: Ticket, msg: WAMessage, wbot: Session, don
 
       await verifyMessage(sendMsg, ticket, ticket.contact);
     };
-
-    // if (buttonActive.value === "list") {
-    //   return botList();
-    // };
 
     if (buttonActive.value === "button" && QueueOption.length <= 4) {
       return botButton();
@@ -1774,28 +1759,6 @@ const handleMessage = async (
          * Tratamento para avaliação do atendente
          */
 
-        //  // dev Ricardo: insistir a responder avaliação
-        //  const rate_ = Number(bodyMessage);
-
-        //  if ((ticket?.lastMessage.includes('_Insatisfeito_') || ticket?.lastMessage.includes('Por favor avalie nosso atendimento.')) &&  (!isFinite(rate_))) {
-        //      const debouncedSentMessage = debounce(
-        //        async () => {
-        //          await wbot.sendMessage(
-        //            `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
-        //            }`,
-        //            {
-        //              text: 'Por favor avalie nosso atendimento.'
-        //            }
-        //          );
-        //        },
-        //        1000,
-        //        ticket.id
-        //      );
-        //      debouncedSentMessage();
-        //      return;
-        //  }
-        //  // dev Ricardo
-
         if (ticketTraking !== null && verifyRating(ticketTraking)) {
 
           handleRating(parseFloat(bodyMessage), ticket, ticketTraking);
@@ -1895,7 +1858,7 @@ const handleMessage = async (
             const endTime = moment(schedule.endTime, "HH:mm");
 
             if (now.isBefore(startTime) || now.isAfter(endTime)) {
-              const body = `${queue.outOfHoursMessage}`;
+              const body = queue.outOfHoursMessage;
               const debouncedSentMessage = debounce(
                 async () => {
                   await wbot.sendMessage(
@@ -2226,18 +2189,26 @@ const verifyCampaignMessageAndCloseTicket = async (
   }
 };
 
+const MESSAGE_TYPES = {
+  GROUP_CREATE: "GROUP_CREATE",
+  GROUP_CHANGE_SUBJECT: "GROUP_CHANGE_SUBJECT",
+  GROUP_CHANGE_ICON: "GROUP_CHANGE_ICON",
+  GROUP_CHANGE_INVITE_LINK: "GROUP_CHANGE_INVITE_LINK"
+} as const;
+
 const filterMessages = (msg: WAMessage): boolean => {
   if (msg.message?.protocolMessage) return false;
 
   if (
     [
-      WAMessageStubType.REVOKE,
-      WAMessageStubType.E2E_DEVICE_CHANGED,
-      WAMessageStubType.E2E_IDENTITY_CHANGED,
-      WAMessageStubType.CIPHERTEXT
-    ].includes(msg.messageStubType)
-  )
+      MESSAGE_TYPES.GROUP_CREATE,
+      MESSAGE_TYPES.GROUP_CHANGE_SUBJECT,
+      MESSAGE_TYPES.GROUP_CHANGE_ICON,
+      MESSAGE_TYPES.GROUP_CHANGE_INVITE_LINK
+    ].includes(msg.messageStubType as WAMessageStubType)
+  ) {
     return false;
+  }
 
   return true;
 };
